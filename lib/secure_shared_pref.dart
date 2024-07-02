@@ -528,6 +528,36 @@ class SecureSharedPref extends SuperSecureSharedPref {
     }
   }
 
+  Future<bool> containsKey(String key, {bool isEncrypted = false}) async {
+    _assertFunction(isEncrypted);
+    if (isEncrypted) {
+      if (Platform.isAndroid) {
+        return (await _secureStorage?.containsKey(key: key)) ?? false;
+      } else if (Platform.isIOS) {
+        if (await _isMasterKeyAvailable()) {
+          final keys = await _getEncrypterKeys();
+          final algorithm = _getAlgorithm();
+
+          final encryptedKey = await algorithm.encrypt(key.codeUnits,
+              secretKey:
+                  SecretKey(keys.first[SuperSecureSharedPref.keyForKey]!),
+              nonce: keys.first[SuperSecureSharedPref.ivForKey]);
+          return _sharedPreferences
+              .containsKey(encryptedKey.cipherText.toString());
+        } else {
+          throw Exception(
+              "Failed to get data something is not correct, please report issue on github");
+        }
+      } else {
+        throw PlatformException(
+            message: "Not Supported for ${Platform.operatingSystem} platform",
+            code: "501");
+      }
+    } else {
+      return _sharedPreferences.containsKey(key);
+    }
+  }
+
   Future<List<Map<String, List<int>>>> _getEncrypterKeys() async {
     List<Map<String, List<int>>> list = List.empty(growable: true);
     String keyEncrypterSubKey = await getString(
